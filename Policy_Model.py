@@ -6,16 +6,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 class PolicyModel(nn.Module):
-    def __init__(self,learning_rate=3e-4):
+    def __init__(self,learning_rate=1e-4):
         super(PolicyModel, self).__init__()
         # 3 input image channel, 6 output channels, 3x3 square convolution
         # kernel
-        self.conv1 = nn.Conv2d(3, 6, 3)
-        self.conv2 = nn.Conv2d(6, 16, 3)
+        self.conv1 = nn.Conv2d(3, 3, 3)
+        self.conv2 = nn.Conv2d(3, 3, 3)
+        self.conv3 = nn.Conv2d(3, 9, 3)
         # an affine operation: y = Wx + b
-        self.fc1 = nn.Linear(16 * 38 * 51, 120)  # 6*6 from image dimension
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 4)
+        self.fcHidden = nn.Linear(9 * 18 * 18, 100)
+        self.fcOut = nn.Linear(100, 4) 
         self.softmax = nn.Softmax(dim=1)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
@@ -23,13 +23,17 @@ class PolicyModel(nn.Module):
         # Max pooling over a (2, 2) window
         x = F.relu(self.conv1(x.float())) 
         x = F.max_pool2d(x, (2, 2))
-        # If the size is a square you can only specify a single number
-        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv2(x.float())) 
         x = F.max_pool2d(x, (2, 2))
+        x = F.relu(self.conv3(x.float())) 
+        x = F.max_pool2d(x, (2, 2))
+        # If the size is a square you can only specify a single number
+        # print(x.shape)
         x = x.view(-1, self.num_flat_features(x))
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        # print(x.shape)
+        x = self.fcHidden(x)
+        x = F.relu(x)
+        x = self.fcOut(x)
         x = self.softmax(x)
         return x
 
@@ -42,6 +46,7 @@ class PolicyModel(nn.Module):
 
     def get_action(self, state):
         probs = self.forward(state)
+        # print(probs)
         highest_prob_action = np.random.choice([0, 1, 2, 3], p=np.squeeze(probs.detach().numpy()))
         log_prob = torch.log(probs.squeeze(0)[highest_prob_action])
         return highest_prob_action, log_prob
